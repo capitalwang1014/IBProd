@@ -324,14 +324,14 @@ class TradeControl:
         cur_price = []
         for symbol_t,smart_ib in self.smartlist.items():
             if (smart_ib.trade_stat.hold_volume>0 and 
-                smart_ib.trade_stat.moneyplay and 
-                smart_ib.trade_stat.buysellstatus != 'ToBuy'):
+#                 smart_ib.trade_stat.moneyplay and 
+                smart_ib.trade_stat.buysellstatus != 'ToBuy'): 
                 print('symbol in pain:',symbol_t)
                 vol_hold.append(smart_ib.trade_stat.hold_volume)
                 avg_price.append(smart_ib.trade_stat.avg_price)
                 symbol_close.append(symbol_t)
                 cur_price.append(smart_ib.snap_shot.Last) 
-
+        
         if len(symbol_close)>0:
             holds_df = pd.DataFrame({'hold_vol':vol_hold,
                                      'avg_price':avg_price,
@@ -343,18 +343,20 @@ class TradeControl:
             holds_df = holds_df.sort_values(by=['pctdrop'],  ascending = False)
             
             holds_df['acm_loss']= holds_df.money_loss.cumsum()
-            pain_payment = self.acm_profit
+            
+            pain_payment = self.acm_profit  #pre-seted buget for payment
     #             pain_payment = (38+10)/2
             holds_df['close_ind'] =  holds_df['acm_loss'].map(lambda x: 1 if pain_payment  > -x else 0)
             
-            close_df = holds_df[holds_df['close_ind']== 1]
+            close_df = holds_df[holds_df['close_ind']== 1] #when profit can cover loss put in close df
+            
             if close_df.shape[0]>0:
                 for symbol_tt,row in close_df.iterrows():
                     
                     self.smartlist[symbol_tt].close_sale_ind= True
                     
     #                     print('sel:',symbol,sel_vol,'at:',sel_price)
-            else:
+            else: #when profit can not cover even loss from one stock
                 symbol = holds_df.index[0]
                 
                 sel_vol = int(abs(pain_payment/
@@ -362,21 +364,28 @@ class TradeControl:
                                   )
                               )
                 sel_price = holds_df.loc[symbol,'cur_price']
+                
                 if sel_vol>0:
-                    self.smartlist[symbol].sell_IB(sel_price,sel_vol)
+                    if self.smartlist[symbol].trade_stat.moneyplay:
+                        self.smartlist[symbol].sell_IB(sel_price,sel_vol)
+                    else:
+                        self.smartlist[symbol].sell_simu(sel_price,sel_vol)
     #                 print('sel:',symbol,sel_vol,'at:',sel_price)
                 
-            print(holds_df)  
-                  
+#             print(holds_df)  
+            #sale all the profit covered stock      
             for symbol_t,smart_ib in self.smartlist.items():
                 if (smart_ib.trade_stat.hold_volume>0 and 
-                    smart_ib.trade_stat.moneyplay and 
+                    
                     smart_ib.trade_stat.buysellstatus != 'ToBuy' and 
                     smart_ib.close_sale_ind
                     ):
                     sel_vol = smart_ib.trade_stat.hold_volume
-                    sel_price = smart_ib.snap_shot.Last             
-                    self.smartlist[symbol_t].sell_IB(sel_price,sel_vol)
+                    sel_price = smart_ib.snap_shot.Last
+                    if smart_ib.trade_stat.moneyplay:             
+                        self.smartlist[symbol_t].sell_IB(sel_price,sel_vol)
+                    else:
+                        self.smartlist[symbol_t].sell_simu(sel_price,sel_vol)
 
 
     
@@ -719,9 +728,9 @@ class Box:
             if self.all_time_high>self.buy_price*1.005:
                 
                 self.base_line =(max(self.all_time_high/self.buy_price -1.005,0.0025) + 1) * self.buy_price
-                print('new base line:',self.base_line) 
+#                 print('new base line:',self.base_line) 
 #                 pass
-            print('all ttime high:',self.all_time_high,'  ',snap_shot.datetime_t)
+#             print('all ttime high:',self.all_time_high,'  ',snap_shot.datetime_t)
             
         if self.min_post_max.shape[0] > 0:
             if snap_shot.Last <self.min_post_max.iloc[-1]['Min']:
@@ -1062,7 +1071,7 @@ if __name__ == '__main__':
     Datestr = datetime.date.today().strftime("%Y%m%d")
 
     global trdcontrol
-    trdcontrol = TradeControl(budget = 52.0)
+    trdcontrol = TradeControl(budget = 5000.0) #set a super high limit for all simulated case.
     
     simulate = False
     
