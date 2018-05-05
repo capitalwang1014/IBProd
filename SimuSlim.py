@@ -387,7 +387,28 @@ class TradeControl:
                     else:
                         self.smartlist[symbol_t].sell_simu(sel_price,sel_vol)
 
-
+    def profit_report(self,path):
+        #file name
+        Datestr = datetime.date.today().strftime("%Y%m%d")
+        file_t = path + 'profitRPT' + Datestr + '.csv'
+        symbols = []
+        profits = []
+        for symbol,smartib in self.smartlist.items():
+            symbols.append(symbol)
+            if smartib.trade_stat.hold_volume>0:
+                profit_t = -99
+            else:
+                profit_t = smartib.trade_stat.trade_profit
+            profits.append(profit_t)
+        profit_df = pd.DataFrame({'Symbol':symbols,Datestr:profits})
+        profit_df.to_csv(file_t)
+        profit_df = profit_df.sort_values(by=[Datestr])
+        print(profit_df)
+        on_hold = profit_df[profit_df[Datestr] == -99]
+        solds  = profit_df[profit_df[Datestr] != -99]
+        print('On_hold:', on_hold.shape[0],'\n'
+              'Profits:',solds[Datestr].sum())
+        
     
 class Trade:
     '''
@@ -1191,6 +1212,7 @@ if __name__ == '__main__':
         model_path = basePath+'model/'
         data_path = basePath + 'data/'
         data_out = basePath + 'output/'
+        rpt_out = basePath + 'rptout/'
         file_t = model_path+'ScoreMax1.pickled'
         
         trdcontrol.load_model(file_t)
@@ -1236,6 +1258,8 @@ if __name__ == '__main__':
         #use half of the day's profit to pay for loss
 #         trdcontrol.close_sale()
         trdcontrol.close_sale()
+        trdcontrol.profit_report(rpt_out)
+        
         sleepto(16,0,0)
         #close connection
         trdcontrol.con.disconnect()
