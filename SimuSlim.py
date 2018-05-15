@@ -28,6 +28,11 @@ from random import randint
 from time import sleep
 import datetime
 import time
+import urllib
+from bs4 import BeautifulSoup
+
+# from DailyData import get_current_index
+
 '''
 mystery function
 '''
@@ -77,6 +82,62 @@ def log_act(txt):
     logact = open(path + 'Newlog'+Datestr+'.txt', 'a')
     logact.write(txt+"\n")
     logact.close()
+    
+'''
+index price pull
+'''
+def tag2price(tag):
+#     li_t = '<li style="width:30.6%;" class=" D(ib) Bxz(bb) Bdc($c-fuji-grey-c)  Mend(16px)  BdEnd " aria-label="S&amp;P 500" data-reactid="14"><h3 class="Maw(160px)" data-reactid="15"><a class="Fz(s) Ell Fw(b) C($c-fuji-blue-1-b)" href="/quote/^GSPC?p=^GSPC" title="S&amp;P 500" aria-label="S&amp;P 500 has increased by 0.17% or 4.65 points to 2,727.72 points" data-reactid="16">S&amp;P 500</a><br data-reactid="17"/><span class="Trsdu(0.3s) Fz(s) Mt(4px) Mb(0px) Fw(b) D(ib)" data-reactid="18">2,727.72</span><div class="Fz(xs) Fw(b)  C($dataGreen)" data-reactid="19"><span class="Trsdu(0.3s)  C($dataGreen)" data-reactid="20">+4.65</span><span class="Mstart(2px)" data-reactid="21"><!-- react-text: 22 -->(<!-- /react-text --><span class="Trsdu(0.3s)  C($dataGreen)" data-reactid="23">+0.17%</span><!-- react-text: 24 -->)<!-- /react-text --></span></div><a target="_blank" rel="noopener" class="Fl(end) Mt(-30px)" href="/chart/^GSPC" data-symbol="^GSPC" title="S&amp;P 500 Chart" data-reactid="25"><canvas style="width:70px;height:25px;" data-reactid="26"></canvas></a></h3></li>'
+#     tag = BeautifulSoup(li_t,"lxml")
+    spans = tag.find_all('span')
+    price, price_chg,price_chg_pct = 0,0,0
+    for span in spans:
+        if span.string is not None:
+            print(span.string)
+            if '+' in span.string or '-' in span.string:
+                if '%' in span.string:
+                    price_chg_pct = float(span.string.replace(',', '').replace('%',''))/100.0
+                else:
+                    price_chg = float(span.string.replace(',', ''))
+                    
+                
+                print('price change',price_chg)
+            else:
+                price =float(span.string.replace(',', ''))
+                
+    return price, price_chg, price_chg_pct
+
+def get_current_index():
+    #get Yahoo main page
+    SP500_price,SP500_price_chg,SP500_price_chg_pct,Dow30_price,Dow30_price_chg,Dow30_price_chg_pct,Nasdaq_price,Nasdaq_price_chg,Nasdaq_price_chg_pct = 0,0,0 ,0,0,0 ,0,0,0
+    try:
+        with urllib.request.urlopen('https://finance.yahoo.com/') as response:
+            html = response.read()
+
+    except:
+        print('web page get failed')
+        html =  ''
+    #parse to get index price
+    if html != '':
+        
+#         li_t = '<li style="width:30.6%;" class=" D(ib) Bxz(bb) Bdc($c-fuji-grey-c)  Mend(16px)  BdEnd " aria-label="S&amp;P 500" data-reactid="14"><h3 class="Maw(160px)" data-reactid="15"><a class="Fz(s) Ell Fw(b) C($c-fuji-blue-1-b)" href="/quote/^GSPC?p=^GSPC" title="S&amp;P 500" aria-label="S&amp;P 500 has increased by 0.17% or 4.65 points to 2,727.72 points" data-reactid="16">S&amp;P 500</a><br data-reactid="17"/><span class="Trsdu(0.3s) Fz(s) Mt(4px) Mb(0px) Fw(b) D(ib)" data-reactid="18">2,727.72</span><div class="Fz(xs) Fw(b)  C($dataGreen)" data-reactid="19"><span class="Trsdu(0.3s)  C($dataGreen)" data-reactid="20">+4.65</span><span class="Mstart(2px)" data-reactid="21"><!-- react-text: 22 -->(<!-- /react-text --><span class="Trsdu(0.3s)  C($dataGreen)" data-reactid="23">+0.17%</span><!-- react-text: 24 -->)<!-- /react-text --></span></div><a target="_blank" rel="noopener" class="Fl(end) Mt(-30px)" href="/chart/^GSPC" data-symbol="^GSPC" title="S&amp;P 500 Chart" data-reactid="25"><canvas style="width:70px;height:25px;" data-reactid="26"></canvas></a></h3></li>'
+        soup = BeautifulSoup(html,"lxml")
+        lis = soup.find_all('li')
+
+        for li_t in lis:
+            if li_t.attrs.get('aria-label') == 'S&P 500':
+#                 print('find SP500')
+                SP500_price,SP500_price_chg,SP500_price_chg_pct = tag2price(li_t)
+            if li_t.attrs.get('aria-label') == "Dow 30":
+#                 print('find Dow 30')
+                Dow30_price,Dow30_price_chg,Dow30_price_chg_pct = tag2price(li_t)
+                
+            if li_t.attrs.get('aria-label') == "Nasdaq":
+#                 print('find Nasdaq')
+                Nasdaq_price,Nasdaq_price_chg,Nasdaq_price_chg_pct = tag2price(li_t)
+                
+    return SP500_price,SP500_price_chg,SP500_price_chg_pct,Dow30_price,Dow30_price_chg,Dow30_price_chg_pct,Nasdaq_price,Nasdaq_price_chg,Nasdaq_price_chg_pct
+    
     
 '''
 message handler
@@ -1221,7 +1282,7 @@ if __name__ == '__main__':
 #         input_date = sys.argv[1]
 #         trdcontrol.symbol_list = pd.DataFrame.from_csv(data_path+input_date+'today.csv')
         tmp = pd.DataFrame.from_csv(data_path+'20180423today.csv')
-        trdcontrol.symbol_list = tmp[~tmp.index.duplicated(keep='first')]
+        trdcontrol.symbol_list = tmp[~tmp.index.duplicated( keep='first')]
         trdcontrol.init_smartlist()
         
 #         trdcontrol.smartlist['AAPL'].trade_stat.moneyplay
