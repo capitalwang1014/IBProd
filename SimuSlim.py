@@ -383,6 +383,7 @@ class TradeControl:
         vol_hold = []
         avg_price = []
         cur_price = []
+        moneyplays = []
         for symbol_t,smart_ib in self.smartlist.items():
             if (smart_ib.trade_stat.hold_volume>0 and 
 #                 smart_ib.trade_stat.moneyplay and 
@@ -392,13 +393,16 @@ class TradeControl:
                 avg_price.append(smart_ib.trade_stat.avg_price)
                 symbol_close.append(symbol_t)
                 cur_price.append(smart_ib.snap_shot.Last) 
-        
+                moneyplays.append(smart_ib.trade_stat.moneyplay)
         if len(symbol_close)>0:
-            holds_df = pd.DataFrame({'hold_vol':vol_hold,
+            
+            holds_df_all = pd.DataFrame({'hold_vol':vol_hold,
                                      'avg_price':avg_price,
-                                     'cur_price':cur_price},index = symbol_close)
+                                     'cur_price':cur_price,
+                                     'moneyplay':moneyplays},index = symbol_close)
             
-            
+            holds_df = holds_df_all[holds_df_all.moneyplay] 
+            holds_df_simu = holds_df_all[~holds_df_all.moneyplay] 
             holds_df['pctdrop'] = holds_df.cur_price/holds_df.avg_price
             holds_df['money_loss'] = (holds_df.cur_price-holds_df.avg_price)*holds_df.hold_vol
             holds_df = holds_df.sort_values(by=['pctdrop'],  ascending = False)
@@ -412,10 +416,14 @@ class TradeControl:
             close_df = holds_df[holds_df['close_ind']== 1] #when profit can cover loss put in close df
             
             if close_df.shape[0]>0:
-                for symbol_tt,row in close_df.iterrows():
-                    
-                    self.smartlist[symbol_tt].close_sale_ind= True
-                    
+                #sale the stok in pain
+                for symbol_tt in close_df.index:
+                    if self.smartlist[symbol_tt].trade_stat.buysellstatus != 'ToBuy':
+                        self.smartlist[symbol_tt].close_sale_ind= True
+                        sel_vol = self.smartlist[symbol_tt].trade_stat.hold_volume
+                        sel_price = self.smartlist[symbol_tt].snap_shot.Last
+                        self.smartlist[symbol_tt].sell_IB(sel_price,sel_vol)
+                        
     #                     print('sel:',symbol,sel_vol,'at:',sel_price)
             else: #when profit can not cover even loss from one stock
                 symbol = holds_df.index[0]
@@ -427,27 +435,25 @@ class TradeControl:
                 sel_price = holds_df.loc[symbol,'cur_price']
                 
                 if sel_vol>0:
-                    if self.smartlist[symbol].trade_stat.moneyplay:
-                        self.smartlist[symbol].sell_IB(sel_price,sel_vol)
-                    else:
-                        self.smartlist[symbol].sell_simu(sel_price,sel_vol)
+                    self.smartlist[symbol].sell_IB(sel_price,sel_vol)
+                    
     #                 print('sel:',symbol,sel_vol,'at:',sel_price)
+    
+            #sale all simu
+            for symbol_ttt,row in holds_df_simu.iterrows():
+                self.smartlist[symbol_ttt].sell_simu(row['cur_price'],row['hold_vol'])
+                
                 
 #             print(holds_df)  
             #sale all the profit covered stock      
-            for symbol_t,smart_ib in self.smartlist.items():
-                if (smart_ib.trade_stat.hold_volume>0 and 
+#             for symbol_t,smart_ib in self.smartlist.items():
+#                 if (smart_ib.trade_stat.hold_volume>0 and 
+#                     
+#                     smart_ib.trade_stat.buysellstatus != 'ToBuy' and 
+#                     smart_ib.close_sale_ind
+#                     ):
+#                     
                     
-                    smart_ib.trade_stat.buysellstatus != 'ToBuy' and 
-                    smart_ib.close_sale_ind
-                    ):
-                    sel_vol = smart_ib.trade_stat.hold_volume
-                    sel_price = smart_ib.snap_shot.Last
-                    if smart_ib.trade_stat.moneyplay:             
-                        self.smartlist[symbol_t].sell_IB(sel_price,sel_vol)
-                    else:
-                        self.smartlist[symbol_t].sell_simu(sel_price,sel_vol)
-
     def profit_report(self,path):
         #file name
         Datestr = datetime.date.today().strftime("%Y%m%d")
@@ -1054,7 +1060,11 @@ class Smart_IB:
         
         self.trade_stat.place_500(sellprice, sellvol, 'SELL')
         
+        self.trade_stat.trade_profit += (sellprice - self.trade_stat.avg_price)*sellvol
+        trdcontrol.tot_profit += (sellprice - self.trade_stat.avg_price)*sellvol
+        
         self.trade_stat.buysellstatus = 'ToBuy'
+        print('simu sell '+str(sellvol)+' '+self.trade_stat.symbol+' at price:'+str(sellprice)+'profit:'+str(trdcontrol.tot_profit)+ 'time:'+str(self.snap_shot.datetime_t))
         log_act('Money sell '+str(sellvol)+' '+self.trade_stat.symbol+' at price:'+str(sellprice)+ 'time:'+str(self.snap_shot.datetime_t))
         
     def sell_simu(self,sellprice,sellvol):
