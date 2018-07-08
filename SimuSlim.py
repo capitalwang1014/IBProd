@@ -30,7 +30,12 @@ import datetime
 import time
 import urllib
 from bs4 import BeautifulSoup
-from pandas.tests.io.parser import index_col
+# from pandas.tests.io.parser import index_col
+from pandas_datareader import data as pdr
+
+import fix_yahoo_finance as yf
+yf.pdr_override() # <== that's all it takes :-)
+
 
 # from DailyData import get_current_index
 
@@ -107,6 +112,26 @@ def tag2price(tag):
                 price =float(span.string.replace(',', ''))
                 
     return price, price_chg, price_chg_pct
+
+def pick_rule(moj,soj,mtd,s2mtd,rel_thrd = 0):
+#     moj = row['index_open_jump']
+#     soj = row['stk_open_jump']
+#     mtd = row['index_Nmin_trend']
+#     s2mtd = row['stk2indextrend']
+    pick = True
+    
+    if moj <-0.0015 and mtd <0:
+        pick = False
+    elif moj > 0.0015:
+        if soj < 0:
+            pick = False
+        else:
+            if s2mtd < rel_thrd:
+                pick = False
+    else:
+        if s2mtd < rel_thrd:
+            pick = False
+    return pick
 
 def get_current_index():
     #get Yahoo main page
@@ -347,20 +372,22 @@ class TradeControl:
         for symbol in symbols:
             smart_ib = Smart_IB(symbol)
             smart_ib.trade_stat.moneyplay = (self.symbol_list.loc[symbol,'moneyplay'] == 1)
+#             smart_ib.trade_stat.moneyplay = False
             smart_ib.trade_stat.mintrade = self.symbol_list.loc[symbol,'mintrade']
             smart_ib.trade_stat.kelly_pct = self.symbol_list.loc[symbol,'kelly_0lose']/2.0
             self.smartlist[symbol] = smart_ib
             
             self.tick2symbol[smart_ib.trade_stat.tick_id] = symbol
             print('load: ',symbol)
-    def init_trade_size(self):
-        inplay = self.symbol_list.moneyplay.sum()
+            
+    def init_trade_size(self,inplay):
+#         inplay = self.symbol_list.moneyplay.sum()
         
 #         self.margin_buget = 0
-        self.trade_size_high =  max(self.moneyInplay/5,2501)
-        self.trade_size_low =  max(self.moneyInplay/6,2500)
+        self.trade_size_high =  max(self.moneyInplay/5,6000)
+        self.trade_size_low =  max(self.moneyInplay/6,5000)
         self.margin_buget = self.moneyInplay - inplay*self.concurrent_ratio * self.trade_size_low
-        self.margin_buget = 500
+#         self.margin_buget = 500
         print('margin:',self.margin_buget,'max_size:',self.trade_size_high,'min_size:',self.trade_size_low)
             
     
@@ -1248,7 +1275,7 @@ if __name__ == '__main__':
     Datestr = datetime.date.today().strftime("%Y%m%d")
 
     global trdcontrol
-    trdcontrol = TradeControl(budget = 0.0) #set a super high limit for all simulated case.
+    trdcontrol = TradeControl(budget = 500.0) #set a super high limit for all simulated case.
     
     simulate = False
     
@@ -1363,7 +1390,29 @@ if __name__ == '__main__':
                                         , 15
                                         , 58
                                         , 30)
-    
+        open_time = datetime.datetime(now_time.year
+                                        , now_time.month
+                                        , now_time.day
+                                        , 9
+                                        , 30
+                                        , 5)
+        pick_time = datetime.datetime(now_time.year
+                                        , now_time.month
+                                        , now_time.day
+                                        , 9
+                                        , 40
+                                        , 0)
+        end_day = datetime.date(year = now_time.year,month = now_time.month,day = now_time.day)
+        start_day = end_day+datetime.timedelta(days = -7)
+        end_day_s = end_day.isoformat()
+        start_day_s = start_day.isoformat()
+        
+        out_df1 = pdr.get_data_yahoo(tickers = ['^DJI']
+                                      ,start = start_day_s
+                                      ,end = end_day_s
+                                      ,as_panel = False)   
+        DJI_prior = out_df1.Close[-1]
+        
         basePath = '/home/wang/Documents/Production/DaliyModel/'
         model_path = basePath+'model/'
         data_path = basePath + 'data/'
@@ -1376,11 +1425,12 @@ if __name__ == '__main__':
         #load in symbol list
 #         input_date = sys.argv[1]
 #         trdcontrol.symbol_list = pd.DataFrame.from_csv(data_path+input_date+'today.csv')
-        tmp = pd.read_csv(data_path+'20180702today.csv',index_col = 0)
+        tmp = pd.read_csv(data_path+'20180708today.csv',index_col = 0)
         print('Picked: ',tmp.moneyplay.sum())
         trdcontrol.symbol_list = tmp[~tmp.index.duplicated( keep='first')]
         
         trdcontrol.init_smartlist()
+        
         trdcontrol.init_trade_size()
         
 #         trdcontrol.smartlist['AAPL'].trade_stat.moneyplay
@@ -1400,23 +1450,62 @@ if __name__ == '__main__':
         trdcontrol.request_market_data()
         #sleep to market end
         sleep(10)
+        
+        
+        
         print('start looping')
         #sleepto(9,30,0)
         DJI_v = []
         DJI_t = []
+        
+        moneyplay_picked = False
         while datetime.datetime.now()<check_time :
             t = time.time()
             
             for symbol_t,smart_ib_i in trdcontrol.smartlist.items():
-#                 symbol_t = 'JPMMM'
+                #accumulate the DJI value
                 old_price = trdcontrol.DJI_dic.get(symbol_t, -1)
-                if old_price != -1:
+                if old_price != -1: #if return -1 then this symbol is not in the DJI 30
                     if trdcontrol.smartlist[symbol_t].snap_shot.Last !=old_price:
                         trdcontrol.DJI_cal += (trdcontrol.smartlist[symbol_t].snap_shot.Last -old_price)*trdcontrol.DJI_multi
                         trdcontrol.DJI_dic[symbol_t] = trdcontrol.smartlist[symbol_t].snap_shot.Last
-                
-                smart_ib_i.decision()
-                
+                #only start to trade when level 2 pick is done
+                if moneyplay_picked:
+                    smart_ib_i.decision()
+                    
+                    
+            #only do once at the time pick time 9:40 in the morning        
+            if datetime.datetime.now()>pick_time and moneyplay_picked == False:
+                moneyplay_picked = True
+                    #get prior day index
+                DJI_df_t = pd.DataFrame({'DJI':DJI_v,'Time':DJI_t})
+                DJI_df_t = DJI_df_t[DJI_df_t.Time>open_time]
+                DJI_open = DJI_df_t.DJI[0]
+                DJI_Nmin = DJI_df_t.DJI[-1]
+                DJI_oj = DJI_open/DJI_prior - 1.0
+                DJI_trd = DJI_Nmin/DJI_open -1.0 
+                inplay = 0
+                for symbol_t,smart_ib_t in trdcontrol.smartlist.items():
+                    if smart_ib_t.trade_stat.moneyplay:
+                        symbol_dt = smart_ib_t.d_engine.rawdata.copy()
+                        symbol_dt = symbol_dt[symbol_dt.index>open_time]
+                        symbol_open = symbol_dt.Last[0]
+                        symbol_Nmin = symbol_dt.Last[-1]
+                        symbol_prior = symbol_dt.Close[-1]
+                        symbol_oj = symbol_open/symbol_prior - 1.0
+                        symbol_trd = symbol_Nmin/symbol_open -1.0
+                        symbol2indextrd = symbol_trd - DJI_trd
+                        smart_ib_t.trade_stat.moneyplay = pick_rule(DJI_oj
+                                                                    ,symbol_oj
+                                                                    ,DJI_trd
+                                                                    ,symbol2indextrd
+                                                                    ,rel_thrd = 0)
+                        if smart_ib_t.trade_stat.moneyplay:
+                            inplay +=1
+                print('total stock picked', inplay)
+                trdcontrol.init_trade_size(inplay)          
+                    
+                    #calculate the 
                         
             for key,val in trdcontrol.DJI_dic.items():
                 if val ==0:
