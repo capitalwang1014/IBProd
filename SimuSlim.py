@@ -1484,6 +1484,7 @@ if __name__ == '__main__':
                 DJI_Nmin = DJI_df_t.DJI[-1]
                 DJI_oj = DJI_open/DJI_prior - 1.0
                 DJI_trd = DJI_Nmin/DJI_open -1.0 
+                print('market open jump:',DJI_oj,' Market trend :',DJI_trd)
                 inplay = 0
                 for symbol_t,smart_ib_t in trdcontrol.smartlist.items():
                     if smart_ib_t.trade_stat.moneyplay:
@@ -1495,13 +1496,16 @@ if __name__ == '__main__':
                         symbol_oj = symbol_open/symbol_prior - 1.0
                         symbol_trd = symbol_Nmin/symbol_open -1.0
                         symbol2indextrd = symbol_trd - DJI_trd
+                        print(symbol_t, 'stk open jump:',symbol_oj,' stk trend :',symbol_trd)
                         smart_ib_t.trade_stat.moneyplay = pick_rule(DJI_oj
                                                                     ,symbol_oj
                                                                     ,DJI_trd
                                                                     ,symbol2indextrd
                                                                     ,rel_thrd = 0)
                         if smart_ib_t.trade_stat.moneyplay:
+                            print(symbol_t, ' Pikced')
                             inplay +=1
+                            
                 print('total stock picked', inplay)
                 trdcontrol.init_trade_size(inplay)          
                     
