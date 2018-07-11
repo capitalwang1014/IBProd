@@ -14,7 +14,10 @@ from ib.ext.Order import Order
 
 import pickle
 # import Tool.ModelEngine as ME
+import sys
+# sys.path.append('~workspace/Production/Tools/')
 import Tools.MaxDESlim as DE
+
 import importlib
 importlib.reload(DE)
 # import Tool.ModelEngine as ME
@@ -74,12 +77,16 @@ def sleepto(to_hour,to_min,to_sec):
     print('sleep : ',sleep_sec,'  sec')
     sleep(sleep_sec)
 
-def ini_log():
+def ini_log(final_pick):
     
     path =  '/home/wang/Dropbox/Stockbet/Data/Projects/Simu/'
     Datestr = datetime.date.today().strftime("%Y%m%d")
     logact = open(path + 'Newlog'+Datestr+'.txt', 'w+')
-    logact.write("started:"+Datestr+"\n")
+    if len(final_pick)>0:
+        picks = '!'.join(final_pick)
+    else:
+        picks = 'no pick today'
+    logact.write("picked:"+picks+"\n")
     logact.close()
     
 def log_act(txt):
@@ -123,7 +130,7 @@ def pick_rule(moj,soj,mtd,s2mtd,rel_thrd = 0):
     if moj <-0.0015 and mtd <0:
         pick = False
     elif moj > 0.0015:
-        if soj < 0:
+        if soj < -0.003:
             pick = False
         else:
             if s2mtd < rel_thrd:
@@ -131,6 +138,9 @@ def pick_rule(moj,soj,mtd,s2mtd,rel_thrd = 0):
     else:
         if s2mtd < rel_thrd:
             pick = False
+    
+    if mtd > 0.001 and s2mtd >rel_thrd:
+        pick = True
     return pick
 
 def get_current_index():
@@ -308,8 +318,8 @@ class TradeControl:
         self.cashbalance = 0
         self.UnrealizedPnL = 3.1415926
         self.moneyAvailable = 0
-        self.moneyInplay = 2800.0
-        
+        self.moneyInplay = 10416.0
+        self.buyPower = 88000.00
         self.concurrent_ratio = 0.25
         
         self.tick2symbol = {}
@@ -387,6 +397,8 @@ class TradeControl:
         self.trade_size_high =  max(self.moneyInplay/5,6000)
         self.trade_size_low =  max(self.moneyInplay/6,5000)
         self.margin_buget = self.moneyInplay - inplay*self.concurrent_ratio * self.trade_size_low
+        self.margin_buget = max(-self.buyPower+self.trade_size_low
+                                ,self.margin_buget)
 #         self.margin_buget = 500
         print('margin:',self.margin_buget,'max_size:',self.trade_size_high,'min_size:',self.trade_size_low)
             
@@ -1278,109 +1290,10 @@ if __name__ == '__main__':
     trdcontrol = TradeControl(budget = 500.0) #set a super high limit for all simulated case.
     
     simulate = False
-    
-#     model_path = 'C:/Users/Wang/StockBet/Data/Projects/IBpyClass/Model/'
-#     data_path = 'C:/Users/Wang/StockBet/Data/Projects/IBpyClass/data/'
-    
+        
     
     if simulate :
-        #load in model
-        import os
-        import re
-#         model_path = 'C:/Users/Wang/StockBet/Data/Projects/IBpyClass/Model/'
-#         data_path = 'C:/Users/Wang/StockBet/Data/Projects/IBpyClass/rawdata/'
-        hold_out_path = 'C:/Users/ZWANG2/Documents/Projects/IBpy/data/Daily/HoldoutData/'
-        
-        data_path = 'C:/Users/ZWANG2/Documents/Projects/IBpy/data/Daily/DailyData/'
-        model_path = data_path
-        hold_out_path = data_path
-        snap_shot = DE.PriceShot()
-        
-        #find files from certain days
-        
-        Datestr = '20170117'
-        profit  =0
-        filenames = next(os.walk((hold_out_path)))[2]
-        datafiles = [x for x in filenames if '.csv' in x]
-        for file_t in datafiles:
-            matchObj = re.match( r'([A-Z]*)([0-9]*)\.csv', file_t, re.M|re.I)
-            if matchObj is not None:
-                symbol_t =matchObj.group(1)
-                if matchObj.group(2) == Datestr:
-                    print(symbol_t)
-                    symbol_t = 'TSLA'
-                    file_t = symbol_t+Datestr+'.csv'
-                    picked = ['XON','MNST','GKOS','GCP','AJRD','ACIW']
-                    if symbol_t not in picked:
-                        raw_data = pd.DataFrame.from_csv(hold_out_path+file_t)
-        #                 raw_data['Volume'] = raw_data['TVolume']
-                        #initialize the controller
-                        trdcontrol.__init__()
-                        
-                        #load in model
-                        file_m = model_path+'ScoreMax1.pickled'
-                        trdcontrol.load_model(file_m)
-                        #load in symbol list
-                        symlist= pd.DataFrame(columns=['close_jump','moneyplay','mintrade'])
-                        symlist.loc[symbol_t] = [1.1,0,0.01]
-                        trdcontrol.symbol_list = symlist
-                        
-                        trdcontrol.init_smartlist()
-#                         trdcontrol.makeconnection()
-                        #feed in data
-        #                 raw_tmp = raw_data.head(40)
-                        p_last = 0
-                        for time_t, row in raw_data.iterrows():
-                            
-                            if p_last != row['Last']:
-                                p_last = row['Last']
-                                if time_t.hour <= 16 :
-                                    trdcontrol.smartlist[symbol_t].snap_shot.fill(time_t,row)
-        #                             print(time_t)
-                                    trdcontrol.smartlist[symbol_t].decision()
-    #                                 symbol_t = 'NVDA'
-    #                                 price = '38.01'
-                                    
-    #                                 price_t = float(price)
-    #                                 trdcontrol.smartlist[symbol_t].buy_IB(38.53,76)
-                                    if trdcontrol.smartlist[symbol_t].trade_stat.buysellstatus == 'Done':
-                    
-                                        break
-                            
-                    
-                        profit+=trdcontrol.tot_profit
-                        print(profit)
-                        r_data = trdcontrol.smartlist[symbol_t].d_engine.rawdata
-                        time_t = r_data.index[0]
-                        
-                        plot= r_data[['Last']]
-                        plot['speed'] = 0
-                        for i in range(plot.shape[0]-1):
-                            plot.loc[plot.index[i+1],'speed'] = np.abs(plot.iloc[i+1]['Last']/plot.iloc[i]['Last'] - 1)/(plot.index[i+1]-plot.index[i]).total_seconds()
-                            
-                        plot[10:].plot()
-                        plot[['speed']][3:].plot()
-                        plot[['Last']][3:].plot()
-                        
-                        
-                        start = datetime.datetime(time_t.year, time_t.month, time_t.day, 10, 36, 0)
-                        end = datetime.datetime(time_t.year, time_t.month, time_t.day, 10, 37, 18)
-                        plot_dt = plot[(plot.index>start)&(plot.index<end) ]
-                        
-#                         trdcontrol.con.disconnect()
-                        
-#         picked = 'TRTN'
-        plot_data_all = trdcontrol.smartlist[picked].d_engine.plot_data_all
-        plot_data = plot_data_all.drop('time_lapse',axis = 1)
-        plot_data.plot()
-        
-        plot = trdcontrol.smartlist[picked].d_engine.rawdata[['Last']]
-        plot.plot()
-        trdcontrol.smartlist[picked].d_engine.model_trend_output.to_csv('C:/Users/ZWANG2/Temp/check.csv')
-        a = trdcontrol.smartlist[picked].d_engine.model_final.head(10) 
-        a
-#         raw_data.head(10)
-#         a = (trdcontrol.smartlist[symbol_t].snap_shot.Last - trdcontrol.smartlist[symbol_t].snap_shot.Low)/max((trdcontrol.smartlist[symbol_t].snap_shot.High -trdcontrol.smartlist[symbol_t].snap_shot.Low),0.01)
+        pass
     else:
         #load in model
         now_time = datetime.datetime.now()
@@ -1396,6 +1309,7 @@ if __name__ == '__main__':
                                         , 9
                                         , 30
                                         , 5)
+
         pick_time = datetime.datetime(now_time.year
                                         , now_time.month
                                         , now_time.day
@@ -1412,6 +1326,7 @@ if __name__ == '__main__':
                                       ,end = end_day_s
                                       ,as_panel = False)   
         DJI_prior = out_df1.Close[-1]
+        print('Prior DJI closed at:',DJI_prior)
         
         basePath = '/home/wang/Documents/Production/DaliyModel/'
         model_path = basePath+'model/'
@@ -1421,17 +1336,17 @@ if __name__ == '__main__':
         file_t = model_path+'ScoreMax1.pickled'
         
         trdcontrol.load_model(file_t)
-        ini_log()
+        
         #load in symbol list
 #         input_date = sys.argv[1]
 #         trdcontrol.symbol_list = pd.DataFrame.from_csv(data_path+input_date+'today.csv')
-        tmp = pd.read_csv(data_path+'20180708today.csv',index_col = 0)
+        tmp = pd.read_csv(data_path+'20180710today.csv',index_col = 0)
         print('Picked: ',tmp.moneyplay.sum())
         trdcontrol.symbol_list = tmp[~tmp.index.duplicated( keep='first')]
         
         trdcontrol.init_smartlist()
         
-        trdcontrol.init_trade_size()
+#         trdcontrol.init_trade_size()
         
 #         trdcontrol.smartlist['AAPL'].trade_stat.moneyplay
        
@@ -1459,9 +1374,11 @@ if __name__ == '__main__':
         DJI_t = []
         
         moneyplay_picked = False
+        sec_count = 0
         while datetime.datetime.now()<check_time :
             t = time.time()
-            
+            sec_count += 1
+#             print(sec_count)
             for symbol_t,smart_ib_i in trdcontrol.smartlist.items():
                 #accumulate the DJI value
                 old_price = trdcontrol.DJI_dic.get(symbol_t, -1)
@@ -1473,45 +1390,69 @@ if __name__ == '__main__':
                 if moneyplay_picked:
                     smart_ib_i.decision()
                     
-                    
+            DJI_v.append(trdcontrol.DJI_cal)
+            DJI_t.append(datetime.datetime.now())
             #only do once at the time pick time 9:40 in the morning        
             if datetime.datetime.now()>pick_time and moneyplay_picked == False:
                 moneyplay_picked = True
                     #get prior day index
+#                 DJI_v = [2345,3456]
+#                 DJI_t = [1,2]
                 DJI_df_t = pd.DataFrame({'DJI':DJI_v,'Time':DJI_t})
                 DJI_df_t = DJI_df_t[DJI_df_t.Time>open_time]
-                DJI_open = DJI_df_t.DJI[0]
-                DJI_Nmin = DJI_df_t.DJI[-1]
-                DJI_oj = DJI_open/DJI_prior - 1.0
-                DJI_trd = DJI_Nmin/DJI_open -1.0 
-                print('market open jump:',DJI_oj,' Market trend :',DJI_trd)
+                
+                if DJI_df_t.shape[0]>0:
+                    print('DJI_df_t.shape:',DJI_df_t.shape)
+                    
+                    DJI_list = list(DJI_df_t.DJI)
+                    DJI_open = DJI_list[0]
+                    DJI_Nmin = DJI_list[-1]#DJI[DJI_df_t.shape[0]-1]
+                    DJI_oj = DJI_open/DJI_prior - 1.0
+                    DJI_trd = DJI_Nmin/DJI_open -1.0 
+                    print('market open jump:',DJI_oj,' Market trend :',DJI_trd)
+                else:
+                    print('DJI data not collected')
+                    DJI_oj = -0.5
+                    DJI_trd = -0.5
+                    
                 inplay = 0
+                final_pick = []
                 for symbol_t,smart_ib_t in trdcontrol.smartlist.items():
                     if smart_ib_t.trade_stat.moneyplay:
                         symbol_dt = smart_ib_t.d_engine.rawdata.copy()
                         symbol_dt = symbol_dt[symbol_dt.index>open_time]
-                        symbol_open = symbol_dt.Last[0]
-                        symbol_Nmin = symbol_dt.Last[-1]
-                        symbol_prior = symbol_dt.Close[-1]
-                        symbol_oj = symbol_open/symbol_prior - 1.0
-                        symbol_trd = symbol_Nmin/symbol_open -1.0
-                        symbol2indextrd = symbol_trd - DJI_trd
-                        print(symbol_t, 'stk open jump:',symbol_oj,' stk trend :',symbol_trd)
-                        smart_ib_t.trade_stat.moneyplay = pick_rule(DJI_oj
-                                                                    ,symbol_oj
-                                                                    ,DJI_trd
-                                                                    ,symbol2indextrd
-                                                                    ,rel_thrd = 0)
+                        if symbol_dt.shape[0]>0:
+                            last_list = list(symbol_dt.Last)
+                            symbol_open = last_list[0]
+                            symbol_Nmin = last_list[-1]
+                            Close_list = list(symbol_dt.Close)
+                            symbol_prior = Close_list[-1]
+                            symbol_oj = symbol_open/symbol_prior - 1.0
+                            symbol_trd = symbol_Nmin/symbol_open -1.0
+                            symbol2indextrd = symbol_trd - DJI_trd
+                            print(symbol_t, 'stk open jump:',symbol_oj,' stk trend :',symbol_trd)
+                            smart_ib_t.trade_stat.moneyplay = pick_rule(DJI_oj
+                                                                        ,symbol_oj
+                                                                        ,DJI_trd
+                                                                        ,symbol2indextrd
+                                                                        ,rel_thrd = 0)
+                        else:
+                            print(symbol_t,'Data not collected')
+                            smart_ib_t.trade_stat.moneyplay = False
+                            
                         if smart_ib_t.trade_stat.moneyplay:
                             print(symbol_t, ' Pikced')
                             inplay +=1
+                            final_pick.append(symbol_t)
                             
                 print('total stock picked', inplay)
-                trdcontrol.init_trade_size(inplay)          
+                trdcontrol.init_trade_size(inplay)  
+                ini_log(final_pick)        
                     
                     #calculate the 
                         
             for key,val in trdcontrol.DJI_dic.items():
+#                 print(key, val)
                 if val ==0:
                     print(key,' not get price')  
 #                     tickID = trdcontrol.smartlist[symbol_t].trade_stat.tick_id
@@ -1523,8 +1464,7 @@ if __name__ == '__main__':
             #need to save the DJI_Cal data
 
             elapsed_time = time.time() - t
-            DJI_v.append(trdcontrol.DJI_cal)
-            DJI_t.append(datetime.datetime.now())
+            
 #             print('loop time:',elapsed_time, ' DJI:', trdcontrol.DJI_cal)
             sleep(1)
             
@@ -1548,7 +1488,7 @@ if __name__ == '__main__':
         DJI_df.to_csv(data_out+'DJI'+Datestr+'.csv')
         
         
-      
+
 
         
         
