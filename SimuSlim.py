@@ -119,30 +119,116 @@ def tag2price(tag):
                 price =float(span.string.replace(',', ''))
                 
     return price, price_chg, price_chg_pct
-
-def pick_rule(moj,soj,mtd,s2mtd,rel_thrd = 0):
-#     moj = row['index_open_jump']
-#     soj = row['stk_open_jump']
-#     mtd = row['index_Nmin_trend']
-#     s2mtd = row['stk2indextrend']
-    pick = True
+def treatment(soj,std,treat_num = 3):
+    pick = False
+    if treat_num == 1:
+        if soj >0 and std >-0.01:
+            pick = True
+    elif treat_num == 2:    
+        if soj >0 and std >-0.004:
+            pick = True
+    elif treat_num == 3:
+        if soj >0 and std >-0.003:
+            pick = True
+    elif treat_num == 4:
+        if soj >-0.01 and std >-0.01:
+            pick = True
+    elif treat_num == 5:
+        if soj >-0.01 and std >-0.005:
+            pick = True
+    elif treat_num == 6:
+        if std >-0.005:
+            pick = True
     
-    if moj <-0.0015 and mtd <0:
+    elif treat_num == 7:
+        if std >-0.012:
+            pick = True
+    elif treat_num == 8:
         pick = False
-    elif moj > 0.0015:
-        if soj < -0.003:
-            pick = False
-        else:
-            if s2mtd < rel_thrd:
-                pick = False
-    else:
-        if s2mtd < rel_thrd:
-            pick = False
     
-    if mtd > 0.001 and s2mtd >rel_thrd:
-        pick = True
     return pick
+    
 
+def pick_rule(moj,soj,mtd,std):
+    #def grid
+    if moj >0.006:
+        pick = treatment(soj, std, treat_num = 1)
+    elif moj >0.005:
+        if mtd>-0.002:
+            pick = treatment(soj, std, treat_num = 2)
+        else:
+            pick = treatment(soj, std, treat_num = 3)
+    elif moj >0.004:
+        if mtd>0.002:
+            pick = treatment(soj, std, treat_num = 2)
+        else:
+            pick = treatment(soj, std, treat_num = 3)
+    elif moj >0.003:
+        pick = treatment(soj, std, treat_num = 3)
+    elif moj >0.002:
+        if mtd>-0.002:
+            pick = treatment(soj, std, treat_num = 4)
+        else:
+            pick = treatment(soj, std, treat_num = 5)
+        
+    elif moj >0.001:
+        if mtd>-0.002:
+            pick = treatment(soj, std, treat_num = 4)
+        else:
+            pick = treatment(soj, std, treat_num = 5)
+            
+    elif moj >-0.001:
+        if mtd>-0.001:
+            pick = treatment(soj, std, treat_num = 4)
+        else:
+            pick = treatment(soj, std, treat_num = 5)
+    elif moj >-0.002:
+        if mtd>0.001:
+            pick = treatment(soj, std, treat_num = 4)
+        else:
+            pick = treatment(soj, std, treat_num = 5)
+    elif moj >-0.003:
+        if mtd>0.001:
+            pick = treatment(soj, std, treat_num = 4)
+        else:
+            pick = treatment(soj, std, treat_num = 5)
+    elif moj >-0.004:
+        if mtd>0.001:
+            pick = treatment(soj, std, treat_num = 7)
+        else:
+            pick = treatment(soj, std, treat_num = 6)
+    elif moj >-0.005:
+        if mtd<-0.002:
+            pick = treatment(soj, std, treat_num = 8)
+        elif mtd < 0.001:
+            pick = treatment(soj, std, treat_num = 6)
+        else :
+            pick = treatment(soj, std, treat_num = 7)
+    elif moj >-0.006:
+        if mtd<-0.001:
+            pick = treatment(soj, std, treat_num = 8)
+        elif mtd < 0.001:
+            pick = treatment(soj, std, treat_num = 6)
+        else :
+            pick = treatment(soj, std, treat_num = 7)
+    elif moj >-0.007:
+        if mtd<0.001:
+            pick = treatment(soj, std, treat_num = 8)
+        else :
+            pick = treatment(soj, std, treat_num = 7)
+    elif moj <-0.007:
+        if mtd<-0.001:
+            pick = treatment(soj, std, treat_num = 8)
+        else :
+            pick = treatment(soj, std, treat_num = 7)
+    return pick
+'''
+test pick
+'''
+# for i in range()
+# 
+# pick = pick_rule(moj=0.0045,soj=-0.001,mtd=-0.00123,std = -0.0035)
+# pick
 def get_current_index():
     #get Yahoo main page
     SP500_price,SP500_price_chg,SP500_price_chg_pct,Dow30_price,Dow30_price_chg,Dow30_price_chg_pct,Nasdaq_price,Nasdaq_price_chg,Nasdaq_price_chg_pct = 0,0,0 ,0,0,0 ,0,0,0
@@ -318,8 +404,8 @@ class TradeControl:
         self.cashbalance = 0
         self.UnrealizedPnL = 3.1415926
         self.moneyAvailable = 0
-        self.moneyInplay = 10416.0
-        self.buyPower = 88000.00
+        self.moneyInplay = 13495.0
+        self.buyPower = 90000.00
         self.concurrent_ratio = 0.25
         
         self.tick2symbol = {}
@@ -384,7 +470,7 @@ class TradeControl:
             smart_ib.trade_stat.moneyplay = (self.symbol_list.loc[symbol,'moneyplay'] == 1)
 #             smart_ib.trade_stat.moneyplay = False
             smart_ib.trade_stat.mintrade = self.symbol_list.loc[symbol,'mintrade']
-            smart_ib.trade_stat.kelly_pct = self.symbol_list.loc[symbol,'kelly_0lose']/2.0
+            smart_ib.trade_stat.kelly_pct = self.symbol_list.loc[symbol,'kelly_0lose']
             self.smartlist[symbol] = smart_ib
             
             self.tick2symbol[smart_ib.trade_stat.tick_id] = symbol
@@ -394,8 +480,8 @@ class TradeControl:
 #         inplay = self.symbol_list.moneyplay.sum()
         
 #         self.margin_buget = 0
-        self.trade_size_high =  max(self.moneyInplay/5,6000)
-        self.trade_size_low =  max(self.moneyInplay/6,5000)
+        self.trade_size_high =  max(self.moneyInplay/5,8000)
+        self.trade_size_low =  max(self.moneyInplay/6,6000)
         self.margin_buget = self.moneyInplay - inplay*self.concurrent_ratio * self.trade_size_low
         self.margin_buget = max(-self.buyPower+self.trade_size_low
                                 ,self.margin_buget)
@@ -1206,7 +1292,7 @@ class Smart_IB:
             #
             if action == 1:
                 
-                fund = min(trdcontrol.trade_size_high,max(trdcontrol.trade_size_low,trdcontrol.moneyInplay * self.trade_stat.kelly_pct))
+                fund = min(trdcontrol.trade_size_high,max(trdcontrol.trade_size_low,trdcontrol.moneyInplay * self.trade_stat.kelly_pct*1.5))
     #             buyvol = int(self.trade_stat.basefund/buyprice)
                 buyvol = int(fund/buyprice)
             elif action == 2:
@@ -1340,7 +1426,7 @@ if __name__ == '__main__':
         #load in symbol list
 #         input_date = sys.argv[1]
 #         trdcontrol.symbol_list = pd.DataFrame.from_csv(data_path+input_date+'today.csv')
-        tmp = pd.read_csv(data_path+'20180710today.csv',index_col = 0)
+        tmp = pd.read_csv(data_path+'20180712today.csv',index_col = 0)
         print('Picked: ',tmp.moneyplay.sum())
         trdcontrol.symbol_list = tmp[~tmp.index.duplicated( keep='first')]
         
@@ -1431,11 +1517,7 @@ if __name__ == '__main__':
                             symbol_trd = symbol_Nmin/symbol_open -1.0
                             symbol2indextrd = symbol_trd - DJI_trd
                             print(symbol_t, 'stk open jump:',symbol_oj,' stk trend :',symbol_trd)
-                            smart_ib_t.trade_stat.moneyplay = pick_rule(DJI_oj
-                                                                        ,symbol_oj
-                                                                        ,DJI_trd
-                                                                        ,symbol2indextrd
-                                                                        ,rel_thrd = 0)
+                            smart_ib_t.trade_stat.moneyplay = pick_rule(DJI_oj,symbol_oj,DJI_trd,symbol_trd)
                         else:
                             print(symbol_t,'Data not collected')
                             smart_ib_t.trade_stat.moneyplay = False
