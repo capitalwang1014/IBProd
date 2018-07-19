@@ -166,7 +166,7 @@ def pick_rule(moj,soj,mtd,std):
     elif moj >0.003:
         pick = treatment(soj, std, treat_num = 3)
     elif moj >0.002:
-        if mtd>-0.002:
+        if mtd>-0.001: #modified from -0.001 to -0.002 on the 7/18 data
             pick = treatment(soj, std, treat_num = 4)
         else:
             pick = treatment(soj, std, treat_num = 5)
@@ -178,7 +178,7 @@ def pick_rule(moj,soj,mtd,std):
             pick = treatment(soj, std, treat_num = 5)
             
     elif moj >-0.001:
-        if mtd>-0.001:
+        if mtd>-0.002: #modified from -0.001 to -0.002 on the 7/17 data
             pick = treatment(soj, std, treat_num = 4)
         else:
             pick = treatment(soj, std, treat_num = 5)
@@ -406,7 +406,7 @@ class TradeControl:
         self.moneyAvailable = 0
         self.moneyInplay = 13495.0
         self.buyPower = 90000.00
-        self.concurrent_ratio = 0.25
+        self.concurrent_ratio = 0.28
         
         self.tick2symbol = {}
         self.smartlist = {}
@@ -664,6 +664,7 @@ class Trade:
         self.trade_profit = 0
         self.trade_profit_pct = 0.0
         self.contract  = self.make_contract()
+        self.buytime_min = 0.0
         
 #         self.buyprice = 0
         self.buysettime = 0
@@ -1174,7 +1175,7 @@ class Smart_IB:
         between the salvation start and salvation end time the profit target will reduce linearly to the end_threshold
         after salvation end time the profit target will stay on the end threshold
         '''
-        now_time = datetime.datetime.now()
+        now_time = self.snap_shot.datetime_t
         salvation_end = datetime.datetime(now_time.year
                                         , now_time.month
                                         , now_time.day
@@ -1187,8 +1188,10 @@ class Smart_IB:
         
  
         
-        
-        start_threshold = 0.002
+        if self.snap_shot.Low < self.trade_stat.buytime_min: #when the min at buy time is broke through then just keep the money.
+            start_threshold = 2.0/trdcontrol.trade_size_low
+        else:
+            start_threshold = 0.002
         end_threshold = -0.002
         
         if now_time < salvation_start:
@@ -1295,6 +1298,8 @@ class Smart_IB:
                 fund = min(trdcontrol.trade_size_high,max(trdcontrol.trade_size_low,trdcontrol.moneyInplay * self.trade_stat.kelly_pct*1.5))
     #             buyvol = int(self.trade_stat.basefund/buyprice)
                 buyvol = int(fund/buyprice)
+                self.trade_stat.buytime_min = self.snap_shot.Low
+                
             elif action == 2:
                 buyvol = self.trade_stat.hold_volume
                 
@@ -1426,7 +1431,7 @@ if __name__ == '__main__':
         #load in symbol list
 #         input_date = sys.argv[1]
 #         trdcontrol.symbol_list = pd.DataFrame.from_csv(data_path+input_date+'today.csv')
-        tmp = pd.read_csv(data_path+'20180712today.csv',index_col = 0)
+        tmp = pd.read_csv(data_path+'20180716today.csv',index_col = 0)
         print('Picked: ',tmp.moneyplay.sum())
         trdcontrol.symbol_list = tmp[~tmp.index.duplicated( keep='first')]
         
@@ -1528,8 +1533,13 @@ if __name__ == '__main__':
                             final_pick.append(symbol_t)
                             
                 print('total stock picked', inplay)
-                trdcontrol.init_trade_size(inplay)  
-                ini_log(final_pick)        
+                trdcontrol.init_trade_size(inplay)
+#                 DJI_oj= 0.1234
+#                 DJI_trd = -0.345
+#                 str(DJI_oj)
+#                 str(DJI_trd)  
+                
+                ini_log([str(DJI_oj),str(DJI_trd)]+final_pick)        
                     
                     #calculate the 
                         
